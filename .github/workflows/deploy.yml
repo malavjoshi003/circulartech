@@ -1,0 +1,64 @@
+name: Check and deploy CircularTech
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check website
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository code
+        uses: actions/checkout@v4
+
+      - name: Check required files and local links
+        run: python3 scripts/check_site.py
+
+      - name: Check JavaScript syntax
+        run: node --check js/script.js
+
+      - name: Prepare website files
+        if: github.event_name == 'push'
+        run: |
+          mkdir _site
+          cp ./*.html _site/
+          cp -r css js images _site/
+
+      - name: Upload website artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy website
+    if: github.event_name == 'push'
+    needs: check
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Publish website
+        id: deployment
+        uses: actions/deploy-pages@v5
